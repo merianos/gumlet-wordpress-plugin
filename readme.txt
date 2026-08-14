@@ -7,8 +7,8 @@ Text Domain: gumlet
 Author URI: https://www.gumlet.com
 Requires at least: 6.0
 Requires PHP: 7.4
-Tested up to: 7.0
-Stable tag: 1.4.2
+Tested up to: 7.1
+Stable tag: 1.4.3
 License: BSD-2
 License URI: http://opensource.org/licenses/BSD-2-Clause
 
@@ -140,6 +140,12 @@ Please follow our official installation guide: [https://docs.gumlet.com/docs/ima
 If you need any help, you can reach out to us at support@gumlet.com.
 
 == Changelog ==
+
+= 1.4.3 =
+* WordPress 7.1 compatibility: tested up to 7.1.
+
+= 1.4.2 =
+* Fix versioning and changelog
 
 = 1.4.1 =
 * WordPress 7.0 compatibility: tested up to 7.0; requires WordPress 6.0+ and PHP 7.4+.
