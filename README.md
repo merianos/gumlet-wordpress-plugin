@@ -1,3 +1,8 @@
+GREEK LANGUAGE SUPPORT
+=======================
+
+This version of the plugin is a fork of the Gumlet original version with improvements for Greek language support, speed optimization, and new features added.
+
 Gumlet Wordpress Plugin
 =======================
 
