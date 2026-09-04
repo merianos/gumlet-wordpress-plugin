@@ -20,6 +20,14 @@ if ( !defined( 'GUMLET_DEBUG' ) ) {
     define( 'GUMLET_DEBUG', $_GET[ 'GUMLET_DEBUG' ] ?? false );
 }
 
+if ( !defined( 'GUMLET_PLUGIN_URL' ) ) {
+    define( 'GUMLET_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
+}
+
+if ( !defined( 'GUMLET_PLUGIN_DIR' ) ) {
+    define( 'GUMLET_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
+}
+
 if ( GUMLET_DEBUG ) {
     error_reporting( E_ALL );
     ini_set( 'display_errors', 1 );
