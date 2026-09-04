@@ -29,6 +29,62 @@ var gumlet = (
         // Fallback "max" width used when running outside a browser (SSR, etc.)
         const FALLBACK_MAX_WIDTH = 8192;
 
+        // Any Gumlet image-transform param (size, format, operations, AI
+        // operations, color, overlay, text overlay, client hints — see
+        // https://docs.gumlet.com/image/image-transform-api) can be set per
+        // element via a `data-gumlet-<param>` attribute, e.g.
+        // `data-gumlet-blur="20"` or `data-gumlet-e-grayscale="true"`.
+        const GUMLET_DATA_PREFIX          = "gumlet";
+        // How many ancestors up from the element to look for these
+        // attributes — some page builders set them on the <img> itself,
+        // others on a wrapping <figure>/<div>.
+        const GUMLET_DATA_ANCESTOR_DEPTH  = 6;
+
+        /** Reverses the HTML dataset camelCase transform back to a dashed param name, e.g. "EGrayscale" -> "e-grayscale". */
+        function decamelizeParamName( key ) {
+            return key.replace( /[A-Z]/g, ( c, offset ) => ( offset > 0 ? "-" : "" )+c.toLowerCase() );
+        }
+
+        /**
+         * Reads Gumlet transform params from `data-gumlet-<param>`
+         * attributes, checking the element itself first, then walking up
+         * ancestors. A closer element's value always wins over a farther
+         * one's for the same param.
+         */
+        function collectDataParams( el ) {
+            const result = {};
+            let node  = el;
+            let depth = 0;
+
+            while ( node && node.nodeType === Node.ELEMENT_NODE && depth < GUMLET_DATA_ANCESTOR_DEPTH ) {
+                if ( node.dataset ) {
+                    for ( const key in node.dataset ) {
+                        if (
+                            key.length > GUMLET_DATA_PREFIX.length &&
+                            key.indexOf( GUMLET_DATA_PREFIX ) === 0 &&
+                            key[ GUMLET_DATA_PREFIX.length ] >= "A" &&
+                            key[ GUMLET_DATA_PREFIX.length ] <= "Z"
+                        ) {
+                            const paramName = decamelizeParamName( key.slice( GUMLET_DATA_PREFIX.length ) );
+
+                            if ( !( paramName in result ) ) {
+                                result[ paramName ] = node.dataset[ key ];
+                            }
+                        }
+                    }
+                }
+
+                if ( node === document.body ) {
+                    break;
+                }
+
+                node = node.parentElement;
+                depth++;
+            }
+
+            return result;
+        }
+
         /**
          * Builds the list of widths this device/screen can actually use:
          * every breakpoint width up to the device's real max width, plus
@@ -57,6 +113,31 @@ var gumlet = (
         // avoids forcing a synchronous layout once per element when a
         // read/write pair interleaves across many images in a loop.
         var sizeCache = new WeakMap();
+
+        /**
+         * Reads the element's own explicit fixed width/height (attribute or
+         * inline style px value, not a container-derived size) and returns
+         * their ratio. Used to request a matching `h` alongside `w` so the
+         * CDN crops to the actual box instead of returning a full-width
+         * image scaled to the source's native aspect ratio.
+         */
+        function computeExplicitAspectRatio( el ) {
+            const widthAttr  = el.getAttribute( "width" );
+            const heightAttr = el.getAttribute( "height" );
+
+            let w = ( widthAttr && widthAttr.indexOf( "%" ) < 0 ) ? parseFloat( widthAttr ) : null;
+            let h = ( heightAttr && heightAttr.indexOf( "%" ) < 0 ) ? parseFloat( heightAttr ) : null;
+
+            if ( w === null && el.style?.width?.indexOf( "px" ) >= 0 ) {
+                w = parseFloat( el.style.width );
+            }
+
+            if ( h === null && el.style?.height?.indexOf( "px" ) >= 0 ) {
+                h = parseFloat( el.style.height );
+            }
+
+            return ( w && h ) ? h / w : null;
+        }
 
         /**
          * Figures out the rendered (CSS) width an element should be
@@ -118,7 +199,7 @@ var gumlet = (
                 return parseInt( computedStyle?.getPropertyValue( "flex-basis" ).replace( "px", "" ), 10 );
             }
 
-            let targetWidth = ( el.width && ancestor.clientWidth < el.width ) ? el.width : ancestor.clientWidth;
+            let targetWidth = ( el.width && el.width < ancestor.clientWidth ) ? el.width : ancestor.clientWidth;
 
             if ( targetWidth > window.innerWidth ) {
                 targetWidth = window.innerWidth;
@@ -682,7 +763,7 @@ var gumlet = (
              * applying webp/quality/default query params along the way.
              * Returns null for data URIs or hosts Gumlet doesn't manage.
              */
-            get_element_params: src => {
+            get_element_params: ( src, el ) => {
                 if ( src.indexOf( ";base64," ) > -1 ) {
                     return null;
                 }
@@ -731,6 +812,13 @@ var gumlet = (
                 if ( Gumlet.settings.default_params ) {
                     for ( const key in Gumlet.settings.default_params ) {
                         gumletUrl.query[ key ] = Gumlet.settings.default_params[ key ];
+                    }
+                }
+
+                if ( el ) {
+                    const dataParams = collectDataParams( el );
+                    for ( const key in dataParams ) {
+                        gumletUrl.query[ key ] = dataParams[ key ];
                     }
                 }
 
@@ -813,7 +901,7 @@ var gumlet = (
                     return;
                 }
 
-                const params = Gumlet.get_element_params( el.dataset[ Gumlet.settings.data_bg ] );
+                const params = Gumlet.get_element_params( el.dataset[ Gumlet.settings.data_bg ], el );
                 if ( !params ) {
                     el.style.backgroundImage = `url('${ el.dataset[ Gumlet.settings.data_bg ] }')`;
                     return;
@@ -861,7 +949,7 @@ var gumlet = (
                     .split( "," )[ 0 ]
                     .split( /\s+/ )[ 0 ];
 
-                const params = Gumlet.get_element_params( firstSrc );
+                const params = Gumlet.get_element_params( firstSrc, el );
                 if ( !params ) {
                     if ( el.dataset[ Gumlet.settings.data_src ] || el.dataset.srcset ) {
                         el.srcset = el.dataset[ Gumlet.settings.data_src ] || el.dataset.srcset;
@@ -902,7 +990,7 @@ var gumlet = (
                     return;
                 }
 
-                const params = Gumlet.get_element_params( el.dataset[ Gumlet.settings.data_src ] || el.src );
+                const params = Gumlet.get_element_params( el.dataset[ Gumlet.settings.data_src ] || el.src, el );
                 if ( !params ) {
                     if ( el.dataset[ Gumlet.settings.data_src ] ) {
                         el.src = el.dataset[ Gumlet.settings.data_src ];
@@ -924,6 +1012,17 @@ var gumlet = (
                 } else {
                     el.removeAttribute( "srcset" );
                     params.url.query.w = params.url.query.w || sizes.width;
+
+                    if ( !params.url.query.h ) {
+                        const explicitRatio = computeExplicitAspectRatio( el );
+                        if ( explicitRatio ) {
+                            params.url.query.h = Math.round( params.url.query.w * explicitRatio );
+                            params.url.query.mode = params.url.query.mode || "crop";
+                            params.url.query.crop = params.url.query.crop || "smart";
+                            params.url.query.enhance = params.url.query.enhance || "true";
+                        }
+                    }
+
                     if ( Gumlet.settings.auto_dpr ) {
                         params.url.query.dpr = params.url.query.dpr || state.dpr;
                     }
