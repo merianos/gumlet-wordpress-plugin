@@ -97,9 +97,9 @@ class Gumlet {
 
             wp_register_script(
                 'gumlet-script',
-                'https://cdn.jsdelivr.net/npm/gumlet.js@3.0/dist/main.global.js',
+                GUMLET_PLUGIN_URL.'assets/js/gummlet.js',
                 [],
-                '3.0',
+                (string) filemtime( GUMLET_PLUGIN_DIR.'assets/js/gummlet.js' ),
                 true
             );
             wp_script_add_data(
